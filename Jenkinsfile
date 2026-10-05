@@ -93,33 +93,12 @@ pipeline {
                     docker create \
                       --name "$TEST_CONTAINER" \
                       --network ci-test-network \
-                      -w /src/TodoApp.Tests \
+                      -w /src \
+                      -e ConnectionStrings__TodoDb="Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;" \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
-                      sh -c '
-                        set -e
-
-                        echo "DNS resolution inside SDK container:"
-                        getent hosts todoapp-test-db
-
-                        echo "Active test configuration:"
-                        cat appsettings.json
-
-                        echo "Running .NET tests:"
-                        dotnet test TodoApp.Tests.csproj
-                      '
+                      dotnet test TodoApp.Tests/TodoApp.Tests.csproj
 
                     docker cp . "$TEST_CONTAINER":/src
-
-                    cat > /tmp/test-appsettings.json <<'EOF'
-{
-  "ConnectionStrings": {
-    "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
-  }
-}
-EOF
-
-                    docker cp /tmp/test-appsettings.json \
-                      "$TEST_CONTAINER":/src/TodoApp.Tests/appsettings.json
 
                     docker start -a "$TEST_CONTAINER"
 
@@ -170,7 +149,6 @@ EOF
             sh 'docker rm -f todoapp-test-db 2>/dev/null || true'
             sh 'docker rm -f dotnet-test-runner 2>/dev/null || true'
             sh 'docker network rm ci-test-network 2>/dev/null || true'
-            sh 'rm -f /tmp/test-appsettings.json 2>/dev/null || true'
         }
     }
 }

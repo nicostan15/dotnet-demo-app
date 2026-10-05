@@ -12,7 +12,9 @@ public class TodoRepositoryFixture
     public TodoRepositoryFixture()
     {
         var configuration = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json")
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddEnvironmentVariables()
             .Build();
 
         _connectionString = configuration.GetConnectionString("TodoDb")
