@@ -55,20 +55,6 @@ pipeline {
             }
         }
 
-        stage('Configure tests') {
-            steps {
-                sh '''
-                    cat > TodoApp.Tests/appsettings.json <<'EOF'
-{
-  "ConnectionStrings": {
-    "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
-  }
-}
-EOF
-                '''
-            }
-        }
-
         stage('Test') {
             steps {
                 sh '''
@@ -86,7 +72,17 @@ EOF
                       dotnet test TodoApp.Tests/TodoApp.Tests.csproj
 
                     docker cp . "$TEST_CONTAINER":/src
+
+                    docker exec "$TEST_CONTAINER" sh -c 'cat > /src/TodoApp.Tests/appsettings.json <<EOF
+{
+  "ConnectionStrings": {
+    "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
+  }
+}
+EOF'
+
                     docker start -a "$TEST_CONTAINER"
+
                     docker rm "$TEST_CONTAINER"
                 '''
             }
