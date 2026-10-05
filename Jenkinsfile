@@ -15,7 +15,7 @@ pipeline {
                       -v "$WORKSPACE":/src \
                       -w /src \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
-                      dotnet test
+                      dotnet test dotnet-demo.slnx
                 '''
             }
         }
