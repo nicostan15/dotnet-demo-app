@@ -11,11 +11,22 @@ pipeline {
         stage('Test') {
             steps {
                 sh '''
-                    docker run --rm \
-                      -v "$WORKSPACE":/src \
+                    set -e
+
+                    TEST_CONTAINER=dotnet-test-runner
+
+                    docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
+
+                    docker create --name "$TEST_CONTAINER" \
                       -w /src \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
                       dotnet test TodoApp.Tests/TodoApp.Tests.csproj
+
+                    docker cp . "$TEST_CONTAINER":/src
+
+                    docker start -a "$TEST_CONTAINER"
+
+                    docker rm "$TEST_CONTAINER"
                 '''
             }
         }
