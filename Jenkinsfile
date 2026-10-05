@@ -36,7 +36,6 @@ pipeline {
                       sleep 3
                     done
 
-                    echo "MariaDB test database did not become ready"
                     docker logs todoapp-test-db
                     exit 1
                 '''
@@ -60,21 +59,7 @@ pipeline {
                 sh '''
                     set -e
 
-                    TEST_CONTAINER=dotnet-test-runner
-
-                    docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
-
-                    docker create \
-                      --name "$TEST_CONTAINER" \
-                      --network ci-test-network \
-                      -w /src/TodoApp.Tests \
-                      -e ConnectionStrings__TodoDb="Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;" \
-                      mcr.microsoft.com/dotnet/sdk:10.0 \
-                      dotnet test TodoApp.Tests.csproj
-
-                    docker cp . "$TEST_CONTAINER":/src
-
-                    cat > /tmp/test-appsettings.json <<'EOF'
+                    cat > "$WORKSPACE/test-appsettings.json" <<'EOF'
 {
   "ConnectionStrings": {
     "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
@@ -82,15 +67,14 @@ pipeline {
 }
 EOF
 
-                    docker cp /tmp/test-appsettings.json \
-                      "$TEST_CONTAINER":/src/appsettings.json
-
-                    docker cp /tmp/test-appsettings.json \
-                      "$TEST_CONTAINER":/src/TodoApp.Tests/appsettings.json
-
-                    docker start -a "$TEST_CONTAINER"
-
-                    docker rm "$TEST_CONTAINER"
+                    docker run --rm \
+                      --name dotnet-test-runner \
+                      --network ci-test-network \
+                      -w /src/TodoApp.Tests \
+                      -v "$WORKSPACE":/src:ro \
+                      -v "$WORKSPACE/test-appsettings.json":/src/TodoApp.Tests/appsettings.json:ro \
+                      mcr.microsoft.com/dotnet/sdk:10.0 \
+                      dotnet test TodoApp.Tests.csproj
                 '''
             }
         }
@@ -137,6 +121,7 @@ EOF
             sh 'docker rm -f todoapp-test-db 2>/dev/null || true'
             sh 'docker rm -f dotnet-test-runner 2>/dev/null || true'
             sh 'docker network rm ci-test-network 2>/dev/null || true'
+            sh 'rm -f "$WORKSPACE/test-appsettings.json" 2>/dev/null || true'
         }
     }
 }
