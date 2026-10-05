@@ -60,7 +60,20 @@ pipeline {
                 sh '''
                     set -e
 
-                    cat > "$WORKSPACE/test-appsettings.json" <<'EOF'
+                    TEST_CONTAINER=dotnet-test-runner
+
+                    docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
+
+                    docker create \
+                      --name "$TEST_CONTAINER" \
+                      --network ci-test-network \
+                      -w /src/TodoApp.Tests \
+                      mcr.microsoft.com/dotnet/sdk:10.0 \
+                      sh -c 'cat appsettings.json && dotnet test TodoApp.Tests.csproj'
+
+                    docker cp . "$TEST_CONTAINER":/src
+
+                    cat > /tmp/test-appsettings.json <<'EOF'
 {
   "ConnectionStrings": {
     "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
@@ -68,14 +81,12 @@ pipeline {
 }
 EOF
 
-                    docker run --rm \
-                      --name dotnet-test-runner \
-                      --network ci-test-network \
-                      -w /src/TodoApp.Tests \
-                      -v "$WORKSPACE":/src \
-                      -v "$WORKSPACE/test-appsettings.json":/src/TodoApp.Tests/appsettings.json:ro \
-                      mcr.microsoft.com/dotnet/sdk:10.0 \
-                      dotnet test TodoApp.Tests.csproj
+                    docker cp /tmp/test-appsettings.json \
+                      "$TEST_CONTAINER":/src/TodoApp.Tests/appsettings.json
+
+                    docker start -a "$TEST_CONTAINER"
+
+                    docker rm "$TEST_CONTAINER"
                 '''
             }
         }
@@ -122,7 +133,7 @@ EOF
             sh 'docker rm -f todoapp-test-db 2>/dev/null || true'
             sh 'docker rm -f dotnet-test-runner 2>/dev/null || true'
             sh 'docker network rm ci-test-network 2>/dev/null || true'
-            sh 'rm -f "$WORKSPACE/test-appsettings.json" 2>/dev/null || true'
+            sh 'rm -f /tmp/test-appsettings.json 2>/dev/null || true'
         }
     }
 }
