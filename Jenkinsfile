@@ -99,9 +99,7 @@ pipeline {
                       dotnet test TodoApp.Tests/TodoApp.Tests.csproj
 
                     docker cp . "$TEST_CONTAINER":/src
-
                     docker start -a "$TEST_CONTAINER"
-
                     docker rm "$TEST_CONTAINER"
                 '''
             }
@@ -118,9 +116,41 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh 'docker compose down || true'
-                sh 'docker compose up -d'
-                sh 'docker compose ps'
+                sh '''
+                    set -e
+
+                    docker compose down || true
+                    docker compose up -d
+
+                    for i in $(seq 1 20); do
+                      if docker exec todoappdb \
+                        mariadb-admin ping -h 127.0.0.1 -uroot -psekrit --silent; then
+                        echo "Deployment database is ready"
+                        break
+                      fi
+
+                      echo "Waiting for deployment database ($i/20)..."
+                      sleep 3
+                    done
+
+                    if ! docker exec todoappdb \
+                      mariadb-admin ping -h 127.0.0.1 -uroot -psekrit --silent; then
+                      echo "Deployment database did not become ready"
+                      docker logs todoappdb
+                      exit 1
+                    fi
+
+                    docker exec -i todoappdb \
+                      mariadb -h 127.0.0.1 -uroot -psekrit todo_db \
+                      < TodoApp/schema.sql
+
+                    docker exec todoappdb \
+                      mariadb -h 127.0.0.1 -uroot -psekrit \
+                      -e "SHOW TABLES FROM todo_db;"
+
+                    docker compose restart todoapp
+                    docker compose ps
+                '''
             }
         }
 
