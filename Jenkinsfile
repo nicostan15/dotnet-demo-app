@@ -62,6 +62,25 @@ pipeline {
             }
         }
 
+        stage('Verify database from network') {
+            steps {
+                sh '''
+                    set -e
+
+                    docker run --rm \
+                      --network ci-test-network \
+                      mariadb:11 \
+                      mariadb \
+                        -h todoapp-test-db \
+                        -P 3306 \
+                        -utodo_usr \
+                        -pletmeinplz \
+                        todo_test_db \
+                        -e "SELECT 1 AS database_connection_ok;"
+                '''
+            }
+        }
+
         stage('Test') {
             steps {
                 sh '''
@@ -79,19 +98,11 @@ pipeline {
                       sh -c '
                         set -e
 
-                        echo "Testing DNS resolution:"
-                        getent hosts todoapp-test-db || true
+                        echo "DNS resolution inside SDK container:"
+                        getent hosts todoapp-test-db
 
-                        echo "Testing TCP port 3306:"
-                        (echo > /dev/tcp/todoapp-test-db/3306) 2>/dev/null
-
-                        echo "Testing MariaDB login:"
-                        echo "SELECT 1;" | mariadb \
-                          -h todoapp-test-db \
-                          -P 3306 \
-                          -utodo_usr \
-                          -pletmeinplz \
-                          todo_test_db
+                        echo "Active test configuration:"
+                        cat appsettings.json
 
                         echo "Running .NET tests:"
                         dotnet test TodoApp.Tests.csproj
