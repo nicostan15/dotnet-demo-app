@@ -26,7 +26,7 @@ pipeline {
 
                     for i in $(seq 1 20); do
                       if docker exec todoapp-test-db \
-                        mariadb-admin ping -h localhost -uroot -psekrit --silent; then
+                        mariadb-admin ping -h 127.0.0.1 -uroot -psekrit --silent; then
                         echo "Test database is ready"
                         exit 0
                       fi
@@ -48,8 +48,22 @@ pipeline {
                     set -e
 
                     docker exec -i todoapp-test-db \
-                      mariadb -uroot -psekrit todo_test_db \
+                      mariadb -h 127.0.0.1 -uroot -psekrit todo_test_db \
                       < TodoApp/schema.sql
+                '''
+            }
+        }
+
+        stage('Configure tests') {
+            steps {
+                sh '''
+                    cat > TodoApp.Tests/appsettings.json <<'EOF'
+{
+  "ConnectionStrings": {
+    "TodoDb": "Server=host.docker.internal;Port=3307;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
+  }
+}
+EOF
                 '''
             }
         }
@@ -66,7 +80,6 @@ pipeline {
                     docker create --name "$TEST_CONTAINER" \
                       -w /src \
                       --add-host=host.docker.internal:host-gateway \
-                      -e ConnectionStrings__TodoDb="Server=host.docker.internal;Port=3307;Database=todo_test_db;User=todo_usr;Password=letmeinplz;" \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
                       dotnet test TodoApp.Tests/TodoApp.Tests.csproj
 
@@ -101,6 +114,7 @@ pipeline {
                         grep -q "<" /tmp/todoapp.html
                         exit 0
                       fi
+
                       echo "Waiting for todo-app ($i/12)..."
                       sleep 5
                     done
