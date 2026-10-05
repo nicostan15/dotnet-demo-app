@@ -67,9 +67,10 @@ pipeline {
                     docker create \
                       --name "$TEST_CONTAINER" \
                       --network ci-test-network \
-                      -w /src \
+                      -w /src/TodoApp.Tests \
+                      -e ConnectionStrings__TodoDb="Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;" \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
-                      dotnet test TodoApp.Tests/TodoApp.Tests.csproj
+                      dotnet test TodoApp.Tests.csproj
 
                     docker cp . "$TEST_CONTAINER":/src
 
@@ -80,6 +81,9 @@ pipeline {
   }
 }
 EOF
+
+                    docker cp /tmp/test-appsettings.json \
+                      "$TEST_CONTAINER":/src/appsettings.json
 
                     docker cp /tmp/test-appsettings.json \
                       "$TEST_CONTAINER":/src/TodoApp.Tests/appsettings.json
