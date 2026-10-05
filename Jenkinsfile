@@ -29,16 +29,19 @@ pipeline {
                       if docker exec todoapp-test-db \
                         mariadb-admin ping -h 127.0.0.1 -uroot -psekrit --silent; then
                         echo "Test database is ready"
-                        exit 0
+                        break
                       fi
 
                       echo "Waiting for MariaDB test database ($i/20)..."
                       sleep 3
                     done
 
-                    echo "MariaDB test database did not become ready"
-                    docker logs todoapp-test-db
-                    exit 1
+                    if ! docker exec todoapp-test-db \
+                      mariadb-admin ping -h 127.0.0.1 -uroot -psekrit --silent; then
+                      echo "MariaDB test database did not become ready"
+                      docker logs todoapp-test-db
+                      exit 1
+                    fi
                 '''
             }
         }
@@ -51,6 +54,10 @@ pipeline {
                     docker exec -i todoapp-test-db \
                       mariadb -h 127.0.0.1 -uroot -psekrit todo_test_db \
                       < TodoApp/schema.sql
+
+                    docker exec todoapp-test-db \
+                      mariadb -h 127.0.0.1 -uroot -psekrit \
+                      -e "SHOW TABLES FROM todo_test_db;"
                 '''
             }
         }
@@ -69,7 +76,26 @@ pipeline {
                       --network ci-test-network \
                       -w /src/TodoApp.Tests \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
-                      sh -c 'cat appsettings.json && dotnet test TodoApp.Tests.csproj'
+                      sh -c '
+                        set -e
+
+                        echo "Testing DNS resolution:"
+                        getent hosts todoapp-test-db || true
+
+                        echo "Testing TCP port 3306:"
+                        (echo > /dev/tcp/todoapp-test-db/3306) 2>/dev/null
+
+                        echo "Testing MariaDB login:"
+                        echo "SELECT 1;" | mariadb \
+                          -h todoapp-test-db \
+                          -P 3306 \
+                          -utodo_usr \
+                          -pletmeinplz \
+                          todo_test_db
+
+                        echo "Running .NET tests:"
+                        dotnet test TodoApp.Tests.csproj
+                      '
 
                     docker cp . "$TEST_CONTAINER":/src
 
