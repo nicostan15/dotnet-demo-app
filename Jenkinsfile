@@ -36,6 +36,7 @@ pipeline {
                       sleep 3
                     done
 
+                    echo "MariaDB test database did not become ready"
                     docker logs todoapp-test-db
                     exit 1
                 '''
@@ -71,7 +72,7 @@ EOF
                       --name dotnet-test-runner \
                       --network ci-test-network \
                       -w /src/TodoApp.Tests \
-                      -v "$WORKSPACE":/src:ro \
+                      -v "$WORKSPACE":/src \
                       -v "$WORKSPACE/test-appsettings.json":/src/TodoApp.Tests/appsettings.json:ro \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
                       dotnet test TodoApp.Tests.csproj
