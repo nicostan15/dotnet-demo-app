@@ -73,13 +73,16 @@ pipeline {
 
                     docker cp . "$TEST_CONTAINER":/src
 
-                    docker exec "$TEST_CONTAINER" sh -c 'cat > /src/TodoApp.Tests/appsettings.json <<EOF
+                    cat > /tmp/test-appsettings.json <<'EOF'
 {
   "ConnectionStrings": {
     "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
   }
 }
-EOF'
+EOF
+
+                    docker cp /tmp/test-appsettings.json \
+                      "$TEST_CONTAINER":/src/TodoApp.Tests/appsettings.json
 
                     docker start -a "$TEST_CONTAINER"
 
