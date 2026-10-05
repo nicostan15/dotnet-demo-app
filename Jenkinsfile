@@ -127,9 +127,16 @@ pipeline {
         stage('Acceptance test') {
             steps {
                 sh '''
+                    set -e
+
                     for i in $(seq 1 12); do
-                      if curl -fsS http://localhost:8081/ > /tmp/todoapp.html; then
-                        grep -q "<" /tmp/todoapp.html
+                      if docker run --rm \
+                        --network dotnettodopipeline_default \
+                        curlimages/curl:8.12.1 \
+                        -fsS http://todoapp:8080/ > /tmp/todoapp.html; then
+
+                        echo "Todo-app is reachable from the Docker network"
+                        cat /tmp/todoapp.html
                         exit 0
                       fi
 
@@ -137,7 +144,8 @@ pipeline {
                       sleep 5
                     done
 
-                    echo "Todo-app did not become reachable"
+                    echo "Todo-app did not become reachable from the Docker network"
+                    docker logs todoapp || true
                     exit 1
                 '''
             }
