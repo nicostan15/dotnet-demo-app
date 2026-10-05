@@ -13,15 +13,16 @@ pipeline {
                 sh '''
                     set -e
 
+                    docker network create ci-test-network 2>/dev/null || true
                     docker rm -f todoapp-test-db 2>/dev/null || true
 
                     docker run -d \
                       --name todoapp-test-db \
+                      --network ci-test-network \
                       -e MARIADB_ROOT_PASSWORD=sekrit \
                       -e MARIADB_DATABASE=todo_test_db \
                       -e MARIADB_USER=todo_usr \
                       -e MARIADB_PASSWORD=letmeinplz \
-                      -p 3307:3306 \
                       mariadb:11
 
                     for i in $(seq 1 20); do
@@ -60,7 +61,7 @@ pipeline {
                     cat > TodoApp.Tests/appsettings.json <<'EOF'
 {
   "ConnectionStrings": {
-    "TodoDb": "Server=host.docker.internal;Port=3307;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
+    "TodoDb": "Server=todoapp-test-db;Port=3306;Database=todo_test_db;User=todo_usr;Password=letmeinplz;"
   }
 }
 EOF
@@ -77,16 +78,15 @@ EOF
 
                     docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
 
-                    docker create --name "$TEST_CONTAINER" \
+                    docker create \
+                      --name "$TEST_CONTAINER" \
+                      --network ci-test-network \
                       -w /src \
-                      --add-host=host.docker.internal:host-gateway \
                       mcr.microsoft.com/dotnet/sdk:10.0 \
                       dotnet test TodoApp.Tests/TodoApp.Tests.csproj
 
                     docker cp . "$TEST_CONTAINER":/src
-
                     docker start -a "$TEST_CONTAINER"
-
                     docker rm "$TEST_CONTAINER"
                 '''
             }
@@ -94,7 +94,10 @@ EOF
 
         stage('Cleanup test database') {
             steps {
-                sh 'docker rm -f todoapp-test-db || true'
+                sh '''
+                    docker rm -f todoapp-test-db || true
+                    docker network rm ci-test-network || true
+                '''
             }
         }
 
@@ -130,6 +133,7 @@ EOF
         always {
             sh 'docker rm -f todoapp-test-db 2>/dev/null || true'
             sh 'docker rm -f dotnet-test-runner 2>/dev/null || true'
+            sh 'docker network rm ci-test-network 2>/dev/null || true'
         }
     }
 }
